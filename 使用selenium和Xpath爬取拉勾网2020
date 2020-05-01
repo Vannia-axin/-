@@ -1,0 +1,74 @@
+#代码如下：
+
+from selenium import webdriver
+from lxml import etree
+import time
+
+class LagouSpider(object): 
+    def __init__(self):   
+        self.driver = webdriver.Firefox()
+        self.url = 'https://www.lagou.com/jobs/list_%E7%94%A8%E6%88%B7%E7%A0%94%E7%A9%B6/p-city_0?&cl=false&fromSearch=true&labelWords=&suginput='
+        self.positions = []
+
+    def run(self):   ### run方法作为爬虫的一个入口。
+        self.driver.get(self.url)
+        while True:
+            source = self.driver.page_source    ##获得页面URL
+            self.parse_list_page(source)    ##调用函数获取本页所有职位链接
+
+            next_btn = self.driver.find_element_by_xpath("//div[@class='pager_container']/span[last()]")   ##通过xpath方式获得下一页按钮
+            if 'pager_next pager_next_disabled' in next_btn.get_attribute('class'):    ##获取标签中的属性
+                break  ##如果已经是最后一页，则不再翻页
+            else:
+                next_btn.click()  #实施点击操作。
+            time.sleep(1)   #防止爬取过度频繁被识别为爬虫
+
+    #拿取到所有职位页面的link
+    def parse_list_page(self, source):
+        html = etree.HTML(source) 
+        links = html.xpath('//a[@class="position_link"]/@href')   
+        for link in links:
+            self.request_detail_page(link)
+            time.sleep(1)
+
+    ##请求详情页面
+    def request_detail_page(self, url):
+        #self.driver.get(url)  
+
+        self.driver.execute_script('window.open("%s")' %url)    ##打开一个新的页面。但是代码层面的driver依然停留在当前页面。
+        # # print(self.driver.window_handles)   #获取窗口句柄
+
+        time.sleep(1)      #等待一会，再转换到新窗口句柄 
+        self.driver.switch_to.window(self.driver.window_handles[1])##将driver切换到新的窗口。
+
+        source = self.driver.page_source  ##拿到详情页面的url。
+        self.parse_detail_page(source)
+        
+        self.driver.close()     ##关闭当前详情页面   
+        self.driver.switch_to.window(self.driver.window_handles[0])     #切换到职位列表页
+
+    #解析详情页面
+    def parse_detail_page(self, source):
+        html = etree.HTML(source)
+        PositionName = html.xpath('//span[@class="ceil-job"]/text()')  
+        JobRequirement = html.xpath('//div[@class="job-detail"]/p/text()')   
+        print(PositionName)  
+        print(JobRequirement)
+
+        ##使用字典存储。
+        Position = {
+            'name': PositionName,
+            'JobRequirement':JobRequirement
+        }
+        self.positions.append(Position)
+
+    # def save_position(self, Position)
+    ##也可以用csv文件保存
+
+        print(Position)
+        print('='*50)
+
+
+if __name__ == '__main__':
+    spider = LagouSpider()
+    spider.run()
